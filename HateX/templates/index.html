@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HateX — Hate Speech Detector</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <aside class="left">
+        <div class="brand">
+          <div class="logo">H</div>
+          <div class="title">HateX</div>
+        </div>
+        <nav class="nav">
+          <a class="nav-item active">Home</a>
+          <a class="nav-item">Analyze</a>
+          <a class="nav-item">About</a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="main-header">
+          <h1>Hate Speech Detector</h1>
+          <p class="muted">Paste a tweet or text and get a quick analysis powered by your model.</p>
+        </header>
+
+        <section class="composer">
+          <div class="avatar">@</div>
+          <div class="compose-area">
+            <textarea id="text" placeholder="What's happening?">@user I can't stand those people!</textarea>
+            <div class="controls">
+              <div class="left-controls">
+                <span class="hint">English only</span>
+              </div>
+              <div class="right-controls">
+                <button id="btn" class="btn-primary">Analyze</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="result" class="result" style="display:none">
+          <div class="result-inner">
+            <div id="label" class="label"></div>
+            <div id="score" class="score"></div>
+            <pre id="trace" class="trace" style="display:none"></pre>
+          </div>
+        </section>
+      </main>
+
+      <aside class="right">
+        <div class="card">
+          <h3>How it works</h3>
+          <p class="muted">This demo sends text to the server which loads your `model.pkl` and returns a prediction. Replace `model.pkl` with your trained classifier (pipeline recommended).</p>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const btn = document.getElementById('btn');
+      const out = document.getElementById('result');
+      const label = document.getElementById('label');
+      const score = document.getElementById('score');
+      const trace = document.getElementById('trace');
+      btn.addEventListener('click', async () => {
+        // Minimum display delay (ms) so users see a loading state
+        const MIN_DELAY = 3000;
+        out.style.display = 'none';
+        label.textContent = '';
+        score.textContent = '';
+        trace.style.display = 'none';
+        const text = document.getElementById('text').value;
+
+        // UI: show loading
+        label.textContent = 'Analyzing...';
+        out.classList.remove('error');
+        out.classList.add('loading');
+        out.style.display = 'block';
+        btn.disabled = true;
+
+        try {
+          // Kick off fetch and a minimum timer in parallel; wait for both
+          const fetchP = fetch('/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+          }).then(async r => ({ ok: r.ok, data: await r.json() }));
+
+          const timerP = new Promise(res => setTimeout(res, MIN_DELAY));
+
+          const [fetchRes] = await Promise.all([fetchP, timerP]);
+
+          const data = fetchRes.data;
+          if (!fetchRes.ok) {
+            out.classList.add('error');
+            label.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+            trace.textContent = data.trace || '';
+            if (data.trace) trace.style.display = 'block';
+          } else {
+            out.classList.remove('error');
+            label.textContent = data.prediction;
+            const s = (data.score === null || data.score === undefined) ? 'N/A' : (Math.round(data.score*10000)/100) + '%';
+            score.textContent = 'Confidence: ' + s;
+          }
+        } catch (err) {
+          label.textContent = 'Unexpected error: ' + err;
+          out.classList.add('error');
+        } finally {
+          out.classList.remove('loading');
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
